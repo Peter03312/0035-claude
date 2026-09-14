@@ -109,7 +109,9 @@ const witnessPaths = computed(() => {
   const j = job.value
   const r = result.value
   if (!j || !r || r.feasible) return []
-  return r.witnesses.map((w: Witness) => {
+  return r.witnesses
+    .filter((w: Witness) => w.kind !== 'param')
+    .map((w: Witness) => {
     const pts = arcToPath(j.polygon, j.cum, j.seamOffset, w.arcA, w.arcB)
     return {
       d: pointsToPath(pts),
@@ -268,6 +270,14 @@ svg {
 .outline {
   stroke: #33415c;
   stroke-width: 0.9;
+  fill: none;
+}
+/* 所有沿轮廓的弧段一律描边，绝不填充——近整圈路径填充会遮住刀线 */
+.forbidden,
+.witness,
+.cross-seam,
+.bridge {
+  fill: none;
 }
 .forbidden {
   stroke: #dc2626;

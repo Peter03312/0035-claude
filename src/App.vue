@@ -5,11 +5,13 @@ import CutSheet from './components/CutSheet.vue'
 import { useWorkbench } from './composables/useWorkbench'
 
 const wb = useWorkbench()
-const { job, fileName, result, addMode, selectedId, liveParams } = wb
+const { job, fileName, result, addMode, selectedId, liveParams, paramError } = wb
 const fileInput = ref<HTMLInputElement | null>(null)
 const parseError = ref('')
 const samples = [
   { file: 'regular-box.json', label: '常规纸盒刀版' },
+  { file: 'single-bridge.json', label: '单桥整圈净长' },
+  { file: 'offset-seam.json', label: '接缝不在数组起点' },
   { file: 'greedy-fail.json', label: '贪心失解' },
   { file: 'cross-seam.json', label: '跨接缝长悬空' },
   { file: 'forbidden-touch.json', label: '桥宽擦碰禁区' },
@@ -188,6 +190,7 @@ onMounted(() => {
             />
           </label>
           <p class="muted small">周长 {{ job.perimeter.toFixed(2) }} mm；修改后需重新求解。</p>
+          <p v-if="paramError" class="param-error" data-testid="param-error">{{ paramError }}</p>
         </section>
 
         <section class="panel" data-testid="candidate-panel">

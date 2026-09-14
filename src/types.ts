@@ -107,7 +107,7 @@ export interface SpanInfo {
 }
 
 export interface Witness {
-  kind: 'gap' | 'spacing' | 'no-candidate'
+  kind: 'gap' | 'spacing' | 'no-candidate' | 'param'
   /** 环向区间（自接缝起向前），用于画布高亮；跨接缝时 arcB+L */
   arcA: number
   arcB: number

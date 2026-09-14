@@ -1,0 +1,44 @@
+{
+  "job": "接缝偏置（seam 在右边 s=130，3mm 短桥就开在接缝处）",
+  "contour": [
+    {
+      "x": 0,
+      "y": 0
+    },
+    {
+      "x": 100,
+      "y": 0
+    },
+    {
+      "x": 100,
+      "y": 60
+    },
+    {
+      "x": 0,
+      "y": 60
+    }
+  ],
+  "seam": {
+    "x": 100,
+    "y": 30
+  },
+  "bridgeWidth": 3,
+  "minCenterDistance": 10,
+  "maxFreeLength": 400,
+  "corners": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "candidates": [
+    {
+      "id": "C1",
+      "point": {
+        "x": 100,
+        "y": 30
+      }
+    }
+  ],
+  "forbidden": []
+}

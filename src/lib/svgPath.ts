@@ -16,20 +16,27 @@ export function arcToPath(
 ): Vec[] {
   const L = cum[cum.length - 1]
   const n = polygon.length
+  if (!(L > 0) || !(arcB > arcA + 1e-9)) {
+    const only = offsetToPoint(polygon, cum, ((arcA + seamOffset) % L + L) % L)
+    return [only, { x: only.x, y: only.y }]
+  }
+  // 提升坐标：起点自 polygon[0] 起模 L，终点 = 起点 + 段长（段长 ≤ L，可能越过 polygon[0]）
   const u0 = ((arcA + seamOffset) % L + L) % L
-  const u1 = arcB + seamOffset
+  const segLen = Math.min(arcB - arcA, L)
+  const u1 = u0 + segLen
+
   const pts: Vec[] = [offsetToPoint(polygon, cum, u0)]
 
-  // 找起点之后第一个顶点的提升偏移
+  // u0 所在边（cum[i] <= u0 < cum[i+1]）
   let edge = 0
   for (let i = 0; i < n; i++) {
-    if (cum[i] <= u0 + 1e-9) edge = i
+    if (cum[i] <= u0 + 1e-9 && u0 < cum[i + 1] - 1e-9) {
+      edge = i
+      break
+    }
+    if (i === n - 1) edge = n - 1
   }
   let base = 0
-  if (cum[edge + 1] < u0 - 1e-9) {
-    edge = 0
-    base = L
-  }
   let guard = 0
   while (base + cum[edge + 1] < u1 - 1e-9 && guard < n + 2) {
     pts.push(offsetToPoint(polygon, cum, cum[edge + 1]))
@@ -41,9 +48,7 @@ export function arcToPath(
     guard++
   }
   const endWrapped = ((u1 % L) + L) % L
-  const last = offsetToPoint(polygon, cum, endWrapped)
-  const first = pts[0]
-  if (Math.hypot(last.x - first.x, last.y - first.y) > 1e-6 || pts.length > 1) pts.push(last)
+  pts.push(offsetToPoint(polygon, cum, endWrapped))
   return pts
 }
 

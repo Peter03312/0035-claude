@@ -172,9 +172,9 @@ describe('无解见证', () => {
 
   it('没有可行候选时给出 no-candidate 见证', () => {
     const { raw } = load('infeasible.json')
-    const wide: RawWork = { ...raw, bridgeWidth: 300 }
+    // 桥宽 300 覆盖整圈，每个候选都擦碰禁区；放宽 dMin/G 以隔离“无候选”这一见证
+    const wide: RawWork = { ...raw, bridgeWidth: 300, minCenterDistance: 300, maxFreeLength: 400 }
     const { job } = importWork(wide)
-    // 300 < 320 周长，不报参数错；但每个候选的桥宽都覆盖禁区
     const r = solve(job!)
     expect(r.feasible).toBe(false)
     expect(r.witnesses.some((w) => w.kind === 'no-candidate')).toBe(true)

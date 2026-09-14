@@ -20,6 +20,9 @@ import {
 } from './geometry'
 import { collidingZones, makeZone } from './arcs'
 
+/** 输入点吸附到轮廓的告警阈值（mm）：超过即提示制版工核对，但坐标始终写入吸附点 */
+const SNAP_TOL = 0.5
+
 class IssueBag {
   list: ImportIssue[] = []
   error(path: string, message: string, contourIndex?: number) {
@@ -127,8 +130,19 @@ export function importWork(raw: unknown): ImportOutcome {
   let seamOffset = 0
   const seamRaw = w.seam as { x?: unknown; y?: unknown } | undefined
   if (seamRaw && (seamRaw.x !== undefined || seamRaw.y !== undefined)) {
-    seamPoint = asPoint(seamRaw, 'seam', bag)
-    if (seamPoint) seamOffset = projectOnClosed(polygon, seamPoint).offset
+    const raw = asPoint(seamRaw, 'seam', bag)
+    if (raw) {
+      const pr = projectOnClosed(polygon, raw)
+      const d = Math.hypot(raw.x - pr.point.x, raw.y - pr.point.y)
+      if (d > SNAP_TOL) {
+        bag.warning(
+          'seam',
+          `接缝点偏离轮廓 ${d.toFixed(2)} mm，已吸附到 (${pr.point.x.toFixed(2)}, ${pr.point.y.toFixed(2)})`
+        )
+      }
+      seamOffset = pr.offset
+      seamPoint = pr.point
+    }
   } else if (isNum((w as RawWork & { seamS?: unknown }).seamS)) {
     seamOffset = ((w as RawWork & { seamS: number }).seamS % L + L) % L
     seamPoint = arcToPoint(polygon, cum, 0, seamOffset)
@@ -140,6 +154,28 @@ export function importWork(raw: unknown): ImportOutcome {
   // ---- 候选桥心 ----
   const candidates: Candidate[] = []
   const seenArc = new Map<number, number>()
+  const dupIdSet = new Set<string>()
+
+  // 先做编号查重：重复 id 会让切桥单多行指向同一座桥，必须按错误拒绝
+  if (Array.isArray(w.candidates)) {
+    const firstId = new Map<string, number>()
+    w.candidates.forEach((rcRaw, i) => {
+      const rc = (rcRaw ?? {}) as RawCandidate
+      if (rcRaw && typeof rcRaw === 'object' && typeof rc.id === 'string' && rc.id) {
+        const prev = firstId.get(rc.id)
+        if (prev !== undefined) {
+          dupIdSet.add(rc.id)
+          bag.error(
+            `candidates[${i}].id`,
+            `候选编号 “${rc.id}” 与 candidates[${prev}] 重复，切桥单无法区分桥位`
+          )
+        } else {
+          firstId.set(rc.id, i)
+        }
+      }
+    })
+  }
+
   const addCandidate = (
     idBase: string,
     s: number,
@@ -149,13 +185,6 @@ export function importWork(raw: unknown): ImportOutcome {
     label?: string
   ) => {
     const rs = wrap(s, L)
-    for (const [prev, idx] of seenArc) {
-      const d = Math.min(Math.abs(rs - prev), L - Math.abs(rs - prev))
-      if (d <= EPS) {
-        bag.warning(`candidates[${idx}]`, `候选桥心与 #${idx + 1} 环向重合（1µm 内），已忽略重复点`)
-        return
-      }
-    }
     const idx = candidates.length
     seenArc.set(rs, idx)
     candidates.push({
@@ -190,9 +219,18 @@ export function importWork(raw: unknown): ImportOutcome {
       let point: Vec | null = null
       let edgeIndex = 0
       if (hasPoint) {
-        point = asPoint(rc.point, `${path}.point`, bag)
-        if (point) {
-          const pr = projectOnClosed(polygon, point)
+        const raw = asPoint(rc.point, `${path}.point`, bag)
+        if (raw) {
+          const pr = projectOnClosed(polygon, raw)
+          const snapD = Math.hypot(raw.x - pr.point.x, raw.y - pr.point.y)
+          if (snapD > SNAP_TOL) {
+            bag.warning(
+              `${path}.point`,
+              `候选点偏离轮廓 ${snapD.toFixed(2)} mm，已自动吸附到最近轮廓边 (${pr.point.x.toFixed(2)}, ${pr.point.y.toFixed(2)})；请核对坐标`
+            )
+          }
+          // 切桥坐标一律写入吸附后的轮廓点，绝不使用轮廓外原始输入
+          point = pr.point
           offset = pr.offset
           edgeIndex = pr.edgeIndex
         }
@@ -216,13 +254,23 @@ export function importWork(raw: unknown): ImportOutcome {
         }
       }
       if (offset !== null && point) {
-        addCandidate(
-          typeof rc.id === 'string' && rc.id ? rc.id : `cand-${i}`,
-          toRingArc(offset, seamOffset, L),
-          point,
-          edgeIndex,
-          false
-        )
+        const idBase = typeof rc.id === 'string' && rc.id ? rc.id : `cand-${i}`
+        if (dupIdSet.has(idBase)) return // 编号重复已报错，不再生成候选
+        // 环向位置重合也按错误拒绝（编号无法落到唯一桥位）
+        const rs = wrap(toRingArc(offset, seamOffset, L), L)
+        let clashIdx = -1
+        for (const [prev, pidx] of seenArc) {
+          const d = Math.min(Math.abs(rs - prev), L - Math.abs(rs - prev))
+          if (d <= EPS) {
+            clashIdx = pidx
+            break
+          }
+        }
+        if (clashIdx >= 0) {
+          bag.error(path, `候选桥心与第 ${clashIdx + 1} 个候选环向重合（1µm 内），编号将无法区分`)
+          return
+        }
+        addCandidate(idBase, rs, point, edgeIndex, false)
       }
     })
   }
@@ -261,6 +309,26 @@ export function importWork(raw: unknown): ImportOutcome {
     return null
   }
 
+  const dupZoneId = new Set<string>()
+  if (Array.isArray(w.forbidden)) {
+    const firstZone = new Map<string, number>()
+    w.forbidden.forEach((zfRaw, i) => {
+      if (zfRaw && typeof zfRaw === 'object') {
+        const id = (zfRaw as RawForbidden).id
+        if (typeof id === 'string' && id) {
+          const prev = firstZone.get(id)
+          if (prev !== undefined) {
+            dupZoneId.add(id)
+            bag.error(
+              `forbidden[${i}].id`,
+              `禁区编号 “${id}” 与 forbidden[${prev}] 重复`
+            )
+          } else firstZone.set(id, i)
+        }
+      }
+    })
+  }
+
   if (w.forbidden !== undefined && !Array.isArray(w.forbidden)) {
     bag.error('forbidden', 'forbidden 必须是数组')
   } else if (Array.isArray(w.forbidden)) {
@@ -275,9 +343,9 @@ export function importWork(raw: unknown): ImportOutcome {
       const b = resolveEndpoint(zf, 'to', `${path}.to`)
       if (a !== null && b !== null) {
         const reason = typeof zf.reason === 'string' && zf.reason ? zf.reason : '人工禁区'
-        forbidden.push(
-          makeZone(typeof zf.id === 'string' && zf.id ? zf.id : `zone-${i}`, a, b, L, reason)
-        )
+        const idBase = typeof zf.id === 'string' && zf.id ? zf.id : `zone-${i}`
+        if (dupZoneId.has(idBase)) return
+        forbidden.push(makeZone(idBase, a, b, L, reason))
       }
     })
   }
@@ -301,8 +369,19 @@ export function importWork(raw: unknown): ImportOutcome {
       } else if (cRaw && typeof cRaw === 'object') {
         const c = cRaw as { point?: { x?: unknown; y?: unknown }; at?: unknown; s?: unknown }
         if (c.point && typeof c.point === 'object') {
-          point = asPoint(c.point, `${path}.point`, bag)
-          if (point) s = toRingArc(projectOnClosed(polygon, point).offset, seamOffset, L)
+          const raw = asPoint(c.point, `${path}.point`, bag)
+          if (raw) {
+            const pr = projectOnClosed(polygon, raw)
+            const d = Math.hypot(raw.x - pr.point.x, raw.y - pr.point.y)
+            if (d > SNAP_TOL) {
+              bag.warning(
+                `${path}.point`,
+                `角点偏离轮廓 ${d.toFixed(2)} mm，已吸附到最近轮廓边`
+              )
+            }
+            point = pr.point
+            s = toRingArc(pr.offset, seamOffset, L)
+          }
         } else if (c.at !== undefined) {
           if (!Number.isInteger(c.at) || (c.at as number) < 0 || (c.at as number) >= polygon.length) {
             bag.error(`${path}.at`, 'at 必须是合法顶点下标')

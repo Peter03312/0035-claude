@@ -1,0 +1,44 @@
+{
+  "job": "单桥刀版（整圈净长 314mm，唯一悬空跨接缝）",
+  "contour": [
+    {
+      "x": 0,
+      "y": 0
+    },
+    {
+      "x": 100,
+      "y": 0
+    },
+    {
+      "x": 100,
+      "y": 60
+    },
+    {
+      "x": 0,
+      "y": 60
+    }
+  ],
+  "seam": {
+    "x": 0,
+    "y": 0
+  },
+  "bridgeWidth": 6,
+  "minCenterDistance": 10,
+  "maxFreeLength": 314,
+  "corners": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "candidates": [
+    {
+      "id": "C1",
+      "point": {
+        "x": 100,
+        "y": 60
+      }
+    }
+  ],
+  "forbidden": []
+}

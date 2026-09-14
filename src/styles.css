@@ -205,6 +205,11 @@ body {
 .muted {
   color: var(--muted);
 }
+.param-error {
+  color: #b91c1c;
+  font-size: 12px;
+  margin: 4px 0 0;
+}
 .small {
   font-size: 12px;
 }

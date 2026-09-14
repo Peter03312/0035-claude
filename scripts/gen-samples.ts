@@ -170,4 +170,26 @@ function save(file: string, data: unknown) {
   save('regular-box.json', job('常规纸盒刀版（矩形 100×60）', { arcs, w: 5, dMin: 20, G: 60 }))
 }
 
+// ---------- 6. 单桥：整圈净长 L-w 必须显示为正，且在 G 范围内可行 ----------
+{
+  save(
+    'single-bridge.json',
+    job('单桥刀版（整圈净长 314mm，唯一悬空跨接缝）', { arcs: [160], w: 6, dMin: 10, G: 314 })
+  )
+}
+
+// ---------- 7. 接缝不在数组起点：3mm 桥画在右侧边中部，不允许被画成整圈 ----------
+{
+  save(
+    'offset-seam.json',
+    job('接缝偏置（seam 在右边 s=130，3mm 短桥就开在接缝处）', {
+      arcs: [130],
+      w: 3,
+      dMin: 10,
+      G: 400,
+      seam: rectPoint(130)
+    })
+  )
+}
+
 console.log('samples done')

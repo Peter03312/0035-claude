@@ -15,24 +15,24 @@ const rows = computed(() => {
   const j = job.value
   const r = result.value
   if (!j || !r?.feasible) return []
-  const cand = (id: string) => j.candidates.find((c) => c.id === id)!
-  // 自接缝起顺序：桥心弧长升序；悬空行挂在每座桥之后
+  const byId = new Map(j.candidates.map((c) => [c.id, c]))
+  // spans 已按自接缝桥心升序排列；单桥时 buildSpans 已把整圈净长放在唯一项
   return r.bridges
     .slice()
     .sort((a, b) => a.s - b.s)
     .map((b, i) => {
-      const span = r.spans.find((sp) => sp.fromId === b.candidateId)!
-      const c = cand(b.candidateId)
+      const span = r.spans[i]
+      const c = byId.get(b.candidateId)
       return {
         no: i + 1,
-        label: c.label,
+        label: c?.label ?? b.candidateId,
         arc: b.s,
         x: b.point.x,
         y: b.point.y,
-        edge: c.edgeIndex,
-        custom: c.custom,
-        free: span.freeLength,
-        crosses: span.crossesSeam
+        edge: c?.edgeIndex ?? 0,
+        custom: c?.custom ?? false,
+        free: span?.freeLength ?? j.perimeter - j.bridgeWidth,
+        crosses: span?.crossesSeam ?? true
       }
     })
 })
@@ -113,7 +113,7 @@ void EPS
           <thead><tr><th>类型</th><th>位置</th><th>实测</th><th>限值</th><th>说明</th></tr></thead>
           <tbody>
             <tr v-for="(w, i) in result.witnesses" :key="i">
-              <td>{{ w.kind === 'gap' ? '悬空超长' : w.kind === 'spacing' ? '桥心距不足' : '无可选桥位' }}</td>
+              <td>{{ w.kind === 'gap' ? '悬空超长' : w.kind === 'spacing' ? '桥心距不足' : w.kind === 'param' ? '参数不合法' : '无可选桥位' }}</td>
               <td>{{ w.fromLabel }}→{{ w.toLabel }}{{ w.crossesSeam ? '（跨接缝）' : '' }}</td>
               <td>{{ (w.freeLength ?? w.centerDistance ?? job.perimeter).toFixed(2) }}</td>
               <td>{{ (w.required ?? '—') }}</td>

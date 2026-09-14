@@ -20,6 +20,7 @@ const result = ref<SolveResult | null>(null)
 const stale = ref(false)
 const addMode = ref(false)
 const selectedId = ref<string | null>(null)
+const paramError = ref('')
 
 /** 当前生效参数（画布微调覆盖 JSON 初值） */
 const liveParams = computed(() => ({
@@ -50,6 +51,7 @@ export function useWorkbench() {
     override.maxFreeLength = null
     addMode.value = false
     selectedId.value = null
+    paramError.value = ''
     result.value = null
     stale.value = false
     if (out.job) {
@@ -125,6 +127,15 @@ export function useWorkbench() {
 
   function setParam(key: keyof ParamOverride, value: number | null) {
     if (!job.value) return
+    if (value !== null && (!Number.isFinite(value) || value <= 0)) {
+      paramError.value = '参数必须为正数，已忽略本次输入'
+      return
+    }
+    if (value !== null && key === 'bridgeWidth' && value >= job.value.perimeter) {
+      paramError.value = `桥宽必须小于周长 ${job.value.perimeter.toFixed(2)} mm，已忽略`
+      return
+    }
+    paramError.value = ''
     override[key] = value
     if (key === 'bridgeWidth' && job.value) refreshCollisions(job.value)
     markChanged()
@@ -145,6 +156,7 @@ export function useWorkbench() {
     stale,
     addMode,
     selectedId,
+    paramError,
     loadJson,
     runSolve,
     moveCandidate,
@@ -155,3 +167,5 @@ export function useWorkbench() {
     arcPoint
   }
 }
+
+export type Workbench = ReturnType<typeof useWorkbench>

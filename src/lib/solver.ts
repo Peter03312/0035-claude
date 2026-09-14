@@ -125,6 +125,19 @@ function buildSpans(job: Job, feasible: Candidate[], arcsNorm: number[]): SpanIn
   const { perimeter: L, bridgeWidth: w } = job
   const spans: SpanInfo[] = []
   const labelAt = (s: number): Candidate => feasible.find((c) => Math.abs(c.s - s) <= EPS)!
+  // 单桥：唯一悬空是整圈扣除自身桥宽后的净长 L-w，不是桥到自身的零心距
+  if (arcsNorm.length === 1) {
+    const a = arcsNorm[0]
+    return [
+      {
+        fromId: labelAt(a).id,
+        toId: labelAt(a).id,
+        freeLength: L - w,
+        centerDistance: L,
+        crossesSeam: true
+      }
+    ]
+  }
   for (let i = 0; i < arcsNorm.length; i++) {
     const a = arcsNorm[i]
     const b = arcsNorm[(i + 1) % arcsNorm.length]
@@ -134,14 +147,63 @@ function buildSpans(job: Job, feasible: Candidate[], arcsNorm: number[]): SpanIn
       toId: labelAt(b).id,
       freeLength: gap - w,
       centerDistance: gap,
-      crossesSeam: b <= a + EPS && arcsNorm.length > 1
+      crossesSeam: b <= a + EPS
     })
   }
   return spans
 }
 
+/** 工艺参数硬校验：任何一项不合法都不允许出方案（避免负悬空等误导数据） */
+export function validateParams(p: {
+  perimeter: number
+  bridgeWidth: number
+  minCenterDistance: number
+  maxFreeLength: number
+}): Witness[] {
+  const { perimeter: L, bridgeWidth: w, minCenterDistance: dMin, maxFreeLength: G } = p
+  const out: Witness[] = []
+  const paramWitness = (message: string): Witness => ({
+    kind: 'param',
+    arcA: 0,
+    arcB: L,
+    crossesSeam: false,
+    required: undefined,
+    message
+  })
+  const num = (x: number) => Number.isFinite(x) && x > 0
+  if (!Number.isFinite(L) || L <= 0) out.push(paramWitness('轮廓周长无效'))
+  if (!num(w)) out.push(paramWitness('桥宽必须为正数'))
+  else if (w >= L) out.push(paramWitness(`桥宽 ${w} 不小于周长 ${round3(L)}，桥将覆盖整圈，禁止出方案`))
+  if (!num(dMin)) out.push(paramWitness('最小桥心距必须为正数'))
+  else if (dMin > L) out.push(paramWitness(`最小桥心距 ${dMin} 大于周长 ${round3(L)}，环上放不下两座桥`))
+  if (!num(G)) out.push(paramWitness('最大悬空长度必须为正数'))
+  else if (G < 0) out.push(paramWitness('最大悬空长度不能为负'))
+  if (num(w) && num(dMin) && dMin < w) {
+    out.push(paramWitness(`最小桥心距 ${dMin} 小于桥宽 ${w}，相邻桥覆盖必然搭接`))
+  }
+  return out
+}
+
+function round3(x: number): number {
+  return Math.round(x * 1e3) / 1e3
+}
+
 export function solve(job: Job): SolveResult {
   const { perimeter: L, bridgeWidth: w, minCenterDistance: dMin, maxFreeLength: G } = job
+
+  const paramIssues = validateParams({ perimeter: L, bridgeWidth: w, minCenterDistance: dMin, maxFreeLength: G })
+  const greedy = {
+    produced: false,
+    valid: false,
+    count: 0,
+    maxFree: null as number | null,
+    wrapFree: null as number | null,
+    reason: paramIssues.length ? '参数不合法，未执行摊直贪心' : undefined
+  }
+  if (paramIssues.length) {
+    return infeasible(job, [], greedy, paramIssues)
+  }
+
   const feasible = job.candidates
     .filter((c) => c.collides.length === 0)
     .slice()
@@ -149,14 +211,12 @@ export function solve(job: Job): SolveResult {
   const arcs = feasible.map((c) => c.s)
 
   const g0 = linearGreedy(arcs, L, w, dMin, G)
-  const greedy = {
-    produced: g0.produced,
-    valid: g0.valid,
-    count: g0.count,
-    maxFree: g0.maxFree,
-    wrapFree: g0.wrapFree,
-    reason: g0.reason
-  }
+  greedy.produced = g0.produced
+  greedy.valid = g0.valid
+  greedy.count = g0.count
+  greedy.maxFree = g0.maxFree
+  greedy.wrapFree = g0.wrapFree
+  greedy.reason = g0.reason
 
   const noCandidateWitness = (): Witness[] => [
     {
