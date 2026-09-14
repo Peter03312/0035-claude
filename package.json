@@ -1,0 +1,29 @@
+{
+  "name": "die-bridge-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "模切钢刀桥位纯前端工作台：候选桥位约束求解、画布校正与可打印切桥单",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "samples": "tsx scripts/gen-samples.ts"
+  },
+  "dependencies": {
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^20.19.43",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "tsx": "^4.19.2",
+    "typescript": "~5.7.3",
+    "vite": "^6.0.7",
+    "vitest": "^3.0.4",
+    "vue-tsc": "^2.2.0"
+  }
+}

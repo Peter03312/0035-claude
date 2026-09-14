@@ -1,0 +1,22 @@
+# 静态应用：docker compose up --build
+# 宿主端口可用 APP_PORT 覆盖，默认 8080（容器内固定 80）
+# 一次性校验：docker compose build verify && docker compose run --rm verify
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: die-bridge-workbench:web
+    ports:
+      - "${APP_PORT:-8080}:80"
+    restart: unless-stopped
+
+  verify:
+    build:
+      context: .
+      dockerfile: Dockerfile.verify
+    image: die-bridge-workbench:verify
+    command: ["bash", "docker/verify.sh"]
+    # verify 是一次性服务，不随 `docker compose up` 常驻；仅通过 `docker compose run --rm verify` 调用
+    profiles:
+      - verify

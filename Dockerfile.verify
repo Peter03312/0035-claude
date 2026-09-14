@@ -1,0 +1,7 @@
+# 一次性校验镜像：Vitest + 生产构建 + Playwright（镜像内置 Chromium 与系统库）
+FROM mcr.microsoft.com/playwright:v1.49.1-jammy
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+CMD ["bash", "docker/verify.sh"]
